@@ -13,20 +13,25 @@ app.use(express.static('public'));
 
 // Serve index.html
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
-        if (err) {
-            console.error('Error sending file:', err);
-            res.status(500).send('Internal Server Error');
-        }
-    });
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
 
 // Handle JSON file upload
 app.post('/upload', upload.single('jsonFile'), (req, res) => {
     const filePath = path.join(__dirname, req.file.path);
     const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
+    // Ensure jsonData is an array and calculate total files
+    const totalFiles = Array.isArray(jsonData) ? jsonData.length : 0;
+
+    if (totalFiles === 0) {
+        return res.status(400).send('No files to process.');
+    }
+
+    // Send a response to the client with totalFiles
+    res.json({ totalFiles });
+
+    // Fork the git worker after sending total files to avoid multiple processing triggers
     const gitWorker = fork('gitworker.js');
 
     gitWorker.on('message', (message) => {
@@ -37,10 +42,11 @@ app.post('/upload', upload.single('jsonFile'), (req, res) => {
         });
 
         if (message.status === 'done') {
-            res.sendFile(path.join(__dirname, 'public', 'index.html'));
+            console.log('Processing complete.');
         }
     });
 
+    // Send jsonData to gitWorker for processing
     gitWorker.send(jsonData);
 });
 

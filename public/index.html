@@ -3,116 +3,271 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Git Web App</title>
+    <title>Data migration tool</title>
     <style>
-        #progress-container {
-            width: 100%;
-            background-color: #000000;
-            margin-top: 20px;
-            padding: 5px;
-            border-radius: 5px;
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        #progress-bar {
-            width: 0%;
+        h1 {
+            color: #4a90e2;
+            margin-bottom: 20px;
+        }
+
+        form {
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        input[type="file"] {
+            padding: 10px;
+            border: 2px solid #4a90e2;
+            border-radius: 5px;
+            background-color: #fff;
+            color: #333;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        input[type="file"]:hover {
+            background-color: #4a90e2;
+            color: #fff;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4a90e2;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #357ABD;
+        }
+
+        #progressContainer {
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 30px;
+            text-align: center; /* Center the text */
+        }
+
+        .progress-bar {
+            width: 0;
             height: 25px;
-            background-color: #4caf50;
+            align-content: center; 
+            text-align: center;    
+            background-color: #4CAF50;
+            color: rgb(2, 2, 36);
             text-align: center;
             line-height: 25px;
-            color: white;
             border-radius: 5px;
+            transition: width 0.4s ease;
+            background-color: #4a90e2; 
+            padding: 0 10px;;
+            box-sizing: border-box; 
+            white-space: nowrap;
         }
 
-        .log-container {
-            margin-top: 20px;
+        #logContainer {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            width: 100%;
+            max-width: 1000px;
         }
 
-        .log {
-            padding: 10px;
-            background-color: #f1f1f1;
-            border: 1px solid #ccc;
+        .log-box {
+            border: 1px solid #ddd;
             border-radius: 5px;
-            overflow: auto;
-            height: 200px;
+            padding: 15px;
+            background-color: #fff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-height: 250px;
+            overflow-y: auto;
+            transition: background-color 0.3s ease;
         }
+
+        .log-box strong {
+            color: #4a90e2;
+        }
+
+        .log-box:hover {
+            background-color: #f0f7ff;
+        }
+
+        @media (max-width: 768px) {
+            #logContainer {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        #paginationContainer {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        #paginationContainer button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        #paginationContainer button.active {
+            background-color: #357ABD;
+        }
+
+        #paginationContainer button:hover {
+            background-color: #5AA9E6;
+        }
+
     </style>
 </head>
 <body>
-    <h1>Upload JSON File</h1>
-    <form id="uploadForm" enctype="multipart/form-data" method="post" action="/upload">
+    <h1>Sexy File Uploader</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
         <input type="file" name="jsonFile" accept=".json" required />
         <button type="submit">Upload</button>
     </form>
-
-    <div id="progress-container">
-        <div id="progress-bar">0%</div>
+    <div id="progressContainer">
+        <div class="progress-bar" id="progressBar">Total files to process: 0</div>
     </div>
-
-    <div id="log-container" class="log-container"></div>
-
+    <div id="logContainer"></div>
+    <div id="paginationContainer"></div> <!-- Pagination controls -->
+    
     <script>
-        const form = document.getElementById('uploadForm');
-        const progressBar = document.getElementById('progress-bar');
-        const logContainer = document.getElementById('log-container');
+        const uploadForm = document.getElementById('uploadForm');
+        const progressBar = document.getElementById('progressBar');
+        const logContainer = document.getElementById('logContainer');
+        const paginationContainer = document.getElementById('paginationContainer');
 
-        form.addEventListener('submit', (event) => {
+        let totalFiles = 0;
+        let currentPage = 1;
+        const boxesPerPage = 3;
+        let logs = [];
+
+        uploadForm.onsubmit = async (event) => {
             event.preventDefault();
+            const formData = new FormData(uploadForm);
 
-            const formData = new FormData(form);
-
-            // Inform user that processing has started
-            progressBar.style.width = '0%';
-            progressBar.textContent = `Processing...`;
-            logContainer.innerHTML = ''; // Clear previous logs
-
-            fetch('/upload', {
+            const response = await fetch('/upload', {
                 method: 'POST',
                 body: formData
-            }).then(() => {
-                const socket = new WebSocket(`ws://${window.location.host}`);
-
-                socket.onopen = () => {
-                    progressBar.textContent = 'Processing...';
-                };
-
-                socket.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-
-                    let logDiv = document.getElementById(`log-${data.index}`);
-                    if (!logDiv) {
-                        logDiv = document.createElement('div');
-                        logDiv.className = 'log';
-                        logDiv.id = `log-${data.index}`;
-                        logContainer.appendChild(logDiv);
-                    }
-
-                    if (data.status === 'starting') {
-                        logDiv.innerHTML = `<strong>Processing ${data.message}</strong><br>`;
-                    } else if (data.status === 'info' || data.status === 'done') {
-                        logDiv.innerHTML += `${data.message || ''}<br>`;
-                        const processed = document.querySelectorAll('.log strong').length;
-                        updateProgress(processed, logContainer.children.length);
-                    }
-
-                    if (data.status === 'error') {
-                        alert('An error occurred: ' + data.error);
-                    }
-                };
-
-                socket.onclose = () => {
-                    progressBar.textContent = 'Processing Complete';
-                };
             });
-        });
 
-        const updateProgress = (processed, total) => {
-            const percentage = Math.round((processed / total) * 100);
-            progressBar.style.width = percentage + '%';
-            progressBar.textContent = `${percentage}%`;
+            const data = await response.json();
+            totalFiles = data.totalFiles;
+
+            if (totalFiles > 0) {
+                progressBar.textContent = `Total files to process: ${totalFiles}`;
+                progressBar.style.width = '100%';
+            }
+
+            // WebSocket connection for updates
+            const socket = new WebSocket(`ws://${window.location.host}`);
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.status === 'starting') {
+                    const log = { id: data.index, content: `<strong>Processing ${data.message}</strong><br>` };
+                    logs.push(log);
+                    updatePagination();
+                }
+
+                if (data.status === 'info') {
+                    const log = logs.find(log => log.id === data.index);
+                    if (log) {
+                        log.content += `${data.message}<br>`;
+                        updatePagination();
+                    }
+                }
+
+                if (data.status === 'done') {
+                    const log = logs.find(log => log.id === data.index);
+                    if (log) {
+                        log.content += `<strong>${data.message}</strong><br>`;
+                        updatePagination();
+                    }
+
+                    const processed = logs.length;
+                    const percentage = Math.round((processed / totalFiles) * 100);
+                    progressBar.style.width = percentage + '%';
+                    progressBar.textContent = `${processed} of ${totalFiles} files processed (${percentage}%)`;
+                }
+
+                if (data.status === 'error') {
+                    alert('An error occurred: ' + data.error);
+                }
+            };
         };
+
+        let autoNavigate = true; // Flag to control auto-navigation
+
+        function updatePagination() {
+            const totalPages = Math.ceil(logs.length / boxesPerPage);
+            const lastProcessedIndex = logs.length - 1;
+            const lastProcessedPage = Math.ceil((lastProcessedIndex + 1) / boxesPerPage);
+
+            // Auto-navigate only if the user hasn't manually changed the page and there is a new page
+            if (autoNavigate && currentPage < lastProcessedPage) {
+                currentPage = lastProcessedPage;
+            }
+
+            // Clear current logs
+            logContainer.innerHTML = '';
+
+            const startIndex = (currentPage - 1) * boxesPerPage;
+            const endIndex = Math.min(startIndex + boxesPerPage, logs.length);
+
+            // Display logs for the current page
+            for (let i = startIndex; i < endIndex; i++) {
+                const logDiv = document.createElement('div');
+                logDiv.className = 'log-box';
+                logDiv.innerHTML = logs[i].content;
+                logContainer.appendChild(logDiv);
+            }
+
+            // Update pagination controls
+            updatePaginationControls();
+        }
+
+        function updatePaginationControls() {
+            paginationContainer.innerHTML = '';
+            const totalPages = Math.ceil(logs.length / boxesPerPage);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const pageLink = document.createElement('button');
+                pageLink.textContent = i;
+                pageLink.className = i === currentPage ? 'active' : '';
+                pageLink.onclick = () => {
+                    currentPage = i;
+                    autoNavigate = false; // Stop auto-navigation when the user manually changes the page
+                    updatePagination();
+                };
+                paginationContainer.appendChild(pageLink);
+            }
+        }
 
     </script>
 </body>
