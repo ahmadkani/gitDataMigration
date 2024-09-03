@@ -5,8 +5,12 @@ const http = require('isomorphic-git/http/node');
 
 async function processRepo(data, index, total) {
     const { filePath, repoUrl, username, password } = data;
-    const dir = `/tmp/repo-${Date.now()}`;
+    
+    // Create a directory for each repository based on its URL or a unique identifier
+    const repoName = path.basename(repoUrl, path.extname(repoUrl)); // Extract repo name from URL
+    const dir = path.join(__dirname, 'uploads', repoName);
 
+    // Ensure the directory exists
     fs.mkdirSync(dir, { recursive: true });
 
     process.send({ index, status: 'starting', message: `Starting processing for ${filePath}` });
@@ -64,5 +68,7 @@ process.on('message', async (jsonData) => {
         process.send({ status: 'done' });
     } catch (error) {
         process.send({ status: 'error', error: error.message });
+        console.error('An error occurred:', error);
+        console.error('Error stack trace:', error.stack);
     }
 });

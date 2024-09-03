@@ -141,10 +141,17 @@
             background-color: #5AA9E6;
         }
 
+        #errorMessage {
+            color: red;
+            font-weight: bold;
+            margin-top: 20px;
+            display: none; /* Hidden by default */
+        }
+
     </style>
 </head>
 <body>
-    <h1>Sexy File Uploader</h1>
+    <h1> Data migratin tool</h1>
     <form id="uploadForm" enctype="multipart/form-data">
         <input type="file" name="jsonFile" accept=".json" required />
         <button type="submit">Upload</button>
@@ -154,12 +161,14 @@
     </div>
     <div id="logContainer"></div>
     <div id="paginationContainer"></div> <!-- Pagination controls -->
-    
+    <div id="errorMessage">An error occurred, please check the console for details.</div> <!-- Error Message Display -->
+
     <script>
         const uploadForm = document.getElementById('uploadForm');
         const progressBar = document.getElementById('progressBar');
         const logContainer = document.getElementById('logContainer');
         const paginationContainer = document.getElementById('paginationContainer');
+        const errorMessage = document.getElementById('errorMessage');
 
         let totalFiles = 0;
         let currentPage = 1;
@@ -168,58 +177,90 @@
 
         uploadForm.onsubmit = async (event) => {
             event.preventDefault();
-            const formData = new FormData(uploadForm);
+            errorMessage.style.display = 'none'; // Hide error message
 
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
+            try {
+                const formData = new FormData(uploadForm);
 
-            const data = await response.json();
-            totalFiles = data.totalFiles;
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            if (totalFiles > 0) {
-                progressBar.textContent = `Total files to process: ${totalFiles}`;
-                progressBar.style.width = '100%';
+                if (!response.ok) {
+                    throw new Error(`Failed to upload file: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                totalFiles = data.totalFiles;
+
+                if (totalFiles > 0) {
+                    progressBar.textContent = `Total files to process: ${totalFiles}`;
+                    progressBar.style.width = '100%';
+                }
+
+                // WebSocket connection for updates
+                const socket = new WebSocket(`ws://${window.location.host}`);
+
+                socket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+
+                        if (data.status === 'starting') {
+                            const log = { id: data.index, content: `<strong>Processing ${data.message}</strong><br>` };
+                            logs.push(log);
+                            updatePagination();
+                        }
+
+                        if (data.status === 'info') {
+                            const log = logs.find(log => log.id === data.index);
+                            if (log) {
+                                log.content += `${data.message}<br>`;
+                                updatePagination();
+                            }
+                        }
+
+                        if (data.status === 'done') {
+                            const log = logs.find(log => log.id === data.index);
+                            if (log) {
+                                log.content += `<strong>${data.message}</strong><br>`;
+                                updatePagination();
+                            }
+
+                            const processed = logs.length;
+                            const percentage = Math.round((processed / totalFiles) * 100);
+                            progressBar.style.width = percentage + '%';
+                            progressBar.textContent = `${processed} of ${totalFiles} files processed (${percentage}%)`;
+                        }
+
+                        if (data.status === 'error') {
+                            console.error(`Error from worker: ${data.error}`);
+                            alert('An error occurred: ' + data.error);
+                        }
+                    } catch (err) {
+                        console.error('Error processing message:', err);
+                        errorMessage.style.display = 'block';
+                    }
+                };
+
+                socket.onerror = (event) => {
+                    console.error('WebSocket error:', event);
+                    errorMessage.textContent = 'WebSocket connection error.';
+                    errorMessage.style.display = 'block';
+                };
+
+                socket.onclose = (event) => {
+                    if (!event.wasClean) {
+                        console.error(`WebSocket closed unexpectedly: code=${event.code}, reason=${event.reason}`);
+                        errorMessage.textContent = 'WebSocket connection closed unexpectedly.';
+                        errorMessage.style.display = 'block';
+                    }
+                };
+
+            } catch (err) {
+                console.error('Error during file upload or processing:', err);
+                errorMessage.style.display = 'block';
             }
-
-            // WebSocket connection for updates
-            const socket = new WebSocket(`ws://${window.location.host}`);
-
-            socket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-
-                if (data.status === 'starting') {
-                    const log = { id: data.index, content: `<strong>Processing ${data.message}</strong><br>` };
-                    logs.push(log);
-                    updatePagination();
-                }
-
-                if (data.status === 'info') {
-                    const log = logs.find(log => log.id === data.index);
-                    if (log) {
-                        log.content += `${data.message}<br>`;
-                        updatePagination();
-                    }
-                }
-
-                if (data.status === 'done') {
-                    const log = logs.find(log => log.id === data.index);
-                    if (log) {
-                        log.content += `<strong>${data.message}</strong><br>`;
-                        updatePagination();
-                    }
-
-                    const processed = logs.length;
-                    const percentage = Math.round((processed / totalFiles) * 100);
-                    progressBar.style.width = percentage + '%';
-                    progressBar.textContent = `${processed} of ${totalFiles} files processed (${percentage}%)`;
-                }
-
-                if (data.status === 'error') {
-                    alert('An error occurred: ' + data.error);
-                }
-            };
         };
 
         let autoNavigate = true; // Flag to control auto-navigation
