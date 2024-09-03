@@ -7,12 +7,10 @@ async function processRepo(data, index, total) {
     const { filePath, repoUrl, username, password } = data;
     const dir = `/tmp/repo-${Date.now()}`;
 
-    // Create a new directory for the git repository
     fs.mkdirSync(dir, { recursive: true });
 
     process.send({ index, status: 'starting', message: `Starting processing for ${filePath}` });
 
-    // Initialize a new git repository
     await git.init({ fs, dir });
 
     process.send({ index, status: 'info', message: 'Git repository initialized.' });
@@ -28,7 +26,6 @@ async function processRepo(data, index, total) {
 
     process.send({ index, status: 'info', message: `${fileName} added to repository.` });
 
-    // Add the file to the git index
     await git.add({ fs, dir, filepath: fileName });
 
     process.send({ index, status: 'info', message: 'File added to git index.' });
@@ -51,7 +48,7 @@ async function processRepo(data, index, total) {
         url: repoUrl,
         ref: 'master',
         onAuth: () => ({ username, password }),
-        force: true, // Necessary for pushing to an empty repository
+        force: true,
     });
 
     process.send({ index, status: 'info', message: `Pushed to ${repoUrl}` });
