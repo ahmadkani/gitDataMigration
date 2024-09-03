@@ -4,6 +4,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Git Web App</title>
+    <style>
+        #progress-container {
+            width: 100%;
+            background-color: #000000;
+            margin-top: 20px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        #progress-bar {
+            width: 0%;
+            height: 25px;
+            background-color: #4caf50;
+            text-align: center;
+            line-height: 25px;
+            color: white;
+            border-radius: 5px;
+        }
+
+        .log-container {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .log {
+            padding: 10px;
+            background-color: #f1f1f1;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            overflow: auto;
+            height: 200px;
+        }
+    </style>
 </head>
 <body>
     <h1>Upload JSON File</h1>
@@ -11,5 +46,74 @@
         <input type="file" name="jsonFile" accept=".json" required />
         <button type="submit">Upload</button>
     </form>
+
+    <div id="progress-container">
+        <div id="progress-bar">0%</div>
+    </div>
+
+    <div id="log-container" class="log-container"></div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const progressBar = document.getElementById('progress-bar');
+        const logContainer = document.getElementById('log-container');
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            const formData = new FormData(form);
+
+            // Inform user that processing has started
+            progressBar.style.width = '0%';
+            progressBar.textContent = `Processing...`;
+            logContainer.innerHTML = ''; // Clear previous logs
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            }).then(() => {
+                const socket = new WebSocket(`ws://${window.location.host}`);
+
+                socket.onopen = () => {
+                    progressBar.textContent = 'Processing...';
+                };
+
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+
+                    let logDiv = document.getElementById(`log-${data.index}`);
+                    if (!logDiv) {
+                        logDiv = document.createElement('div');
+                        logDiv.className = 'log';
+                        logDiv.id = `log-${data.index}`;
+                        logContainer.appendChild(logDiv);
+                    }
+
+                    if (data.status === 'starting') {
+                        logDiv.innerHTML = `<strong>Processing ${data.message}</strong><br>`;
+                    } else if (data.status === 'info' || data.status === 'done') {
+                        logDiv.innerHTML += `${data.message || ''}<br>`;
+                        const processed = document.querySelectorAll('.log strong').length;
+                        updateProgress(processed, logContainer.children.length);
+                    }
+
+                    if (data.status === 'error') {
+                        alert('An error occurred: ' + data.error);
+                    }
+                };
+
+                socket.onclose = () => {
+                    progressBar.textContent = 'Processing Complete';
+                };
+            });
+        });
+
+        const updateProgress = (processed, total) => {
+            const percentage = Math.round((processed / total) * 100);
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = `${percentage}%`;
+        };
+
+    </script>
 </body>
 </html>
