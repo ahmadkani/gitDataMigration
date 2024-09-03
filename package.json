@@ -1,0 +1,18 @@
+{
+  "name": "git-webapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.6.0",
+    "express": "^4.19.2",
+    "isomorphic-git": "^1.27.1",
+    "multer": "^1.4.5-lts.1"
+  }
+}
