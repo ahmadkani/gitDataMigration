@@ -6,7 +6,7 @@
         "password": "X5k25UvcT3gWX7c"
     },
     {
-        "filePath": "file1.txt",
+        "filePath": "testFolder",
         "repoUrl": "https://gitea-test-oliwswto5.liara.run/ahmadkani/repo1.git",
         "username": "ahmadkani",
         "password": "X5k25UvcT3gWX7c"
